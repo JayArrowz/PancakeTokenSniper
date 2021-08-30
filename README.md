@@ -9,6 +9,9 @@ ETH/BNB: 0x71f74dEbb7fd42E61de32256537284E06DE8812d
 ## Socials
 Telegram: https://t.me/joinchat/pW9TyMXOkx03Nzg0
 
+## Prerequisites
+* [Net5.0](https://dotnet.microsoft.com/download/dotnet/5.0) (Only need this if you are trying to run the code otherwise please see [releases](https://github.com/JayArrowz/PancakeTokenSniper/releases) it provides binaries)
+
 ## Config
 The Config is listed in `appsettings.json` There are values which you will have to set yourself, these are denoted with `xxx`.
 
@@ -20,6 +23,8 @@ Both are obtained from https://moralis.io for free. You will have to navigate to
 Remember `BscNode` should be WS mainnet Endpoints and `BscHttpApi` should be Http endpoints
 ![image](https://user-images.githubusercontent.com/49910176/131349432-a4768c58-526c-407e-8cf6-547e1aacebf5.png)
 
+## Running the project
+If you want to run the project you can go to [releases](https://github.com/JayArrowz/PancakeTokenSniper/releases) and a binary that will execute on your OS, or install Net5.0 then compile and run the application. You can use `dotnet run BscTokenSniper` to do this.
 
 ## Rug Checks
 There are specific checks involved that this sniper does when buying tokens. Some config values in appsettings.json inside `SniperConfiguration` are used to influence the rug checks. You can disable the Rug checks by setting the `RugCheckEnabled` to false. Be warned this is dangerous.
