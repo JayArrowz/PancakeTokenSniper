@@ -14,7 +14,7 @@ Telegram: https://t.me/joinchat/pW9TyMXOkx03Nzg0
 
 ## Config
 The Config is listed in `appsettings.json` There are values which you will have to set yourself, these are denoted with `xxx`.
-The amount to snipe is denoted in the config as `AmountToSnipe`. This value will trade the `LiquidityPairAddress` in your wallet with the coin to snipe.
+The amount to snipe is denoted in the config as `AmountToSnipe`. This value will trade the `LiquidityPairAddress` in your wallet with the coin to snipe at the current trade price.
 
 ### Bsc Node and Http Api
 Inside the config you will see `BscHttpApi` and `BscNode` keys. 
