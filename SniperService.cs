@@ -2,11 +2,10 @@
 using BscTokenSniper.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Nethereum.BlockchainProcessing;
 using Nethereum.Contracts;
-using Nethereum.Hex.HexTypes;
 using Nethereum.JsonRpc.WebSocketStreamingClient;
 using Nethereum.RPC.Eth.DTOs;
+using Nethereum.RPC.Reactive.Eth;
 using Nethereum.RPC.Reactive.Eth.Subscriptions;
 using Nethereum.Signer;
 using Nethereum.Web3;
@@ -15,7 +14,6 @@ using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -26,12 +24,11 @@ namespace BscTokenSniper
         private readonly Web3 _bscWeb3;
         private readonly Contract _factoryContract;
         private SniperConfiguration _sniperConfig;
-        private HexBigInteger _bscBlockNumber;
+        private bool _disposed;
         private readonly List<IDisposable> _disposables = new();
         private readonly RugHandler _rugChecker;
         private readonly TradeHandler _tradeHandler;
         private readonly CancellationTokenSource _processingCancellation = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-        private Queue<BigInteger> _blockIdQueue;
 
         public SniperService(IOptions<SniperConfiguration> options, RugHandler rugChecker, TradeHandler tradeHandler)
         {
@@ -40,37 +37,6 @@ namespace BscTokenSniper
             _factoryContract = _bscWeb3.Eth.GetContract(File.ReadAllText("./Abis/PairCreated.json"), _sniperConfig.PancakeswapFactoryAddress);
             _rugChecker = rugChecker;
             _tradeHandler = tradeHandler;
-        }
-
-        private async Task ReadLogs(BlockchainProcessor processor, IWeb3 web3, Contract contract, Action<EventLog<PairCreatedEvent>> tokenSwapEvent, Func<HexBigInteger> currentProcessedBlockNumber, HexBigInteger newBlockNumber, Action<HexBigInteger> onBlockUpdate)
-        {
-            var currentProcessedBlock = currentProcessedBlockNumber.Invoke();
-            var isBehind = currentProcessedBlock != null && BigInteger.Subtract(newBlockNumber.Value, currentProcessedBlock.Value) > 1;
-            if (isBehind)
-            {
-                Log.Logger.Warning("Log processing has missed more than one block: From: {currentProcessedBlock}, To: {newBlockNumber}", currentProcessedBlock, newBlockNumber);
-            }
-
-            HexBigInteger fromBlockNumber =
-                currentProcessedBlock == null ?
-                    new HexBigInteger(BigInteger.Subtract(newBlockNumber.Value, new BigInteger(1)))
-                    : (isBehind ? currentProcessedBlock : newBlockNumber);
-
-            Log.Logger.Information("Reading Logs from Block: {fromBlockNumber} to {newBlockNumber}", fromBlockNumber, newBlockNumber);
-            onBlockUpdate.Invoke(newBlockNumber);
-            try
-            {
-                await processor.ExecuteAsync(startAtBlockNumberIfNotProcessed: fromBlockNumber,
-                    cancellationToken: _processingCancellation.Token,
-                    toBlockNumber: newBlockNumber);
-            }
-            catch (Exception e)
-            {
-                Serilog.Log.Logger.Error("Error processing block", e);
-            }
-
-            Log.Logger.Debug("Processed: {fromBlockNumber} to {newBlockNumber}, Contract address: {Address}", fromBlockNumber, newBlockNumber, contract.Address);
-
         }
 
         private void CreateTokenPair(FilterLog log, Action<EventLog<PairCreatedEvent>> onNext)
@@ -83,32 +49,41 @@ namespace BscTokenSniper
             }
         }
 
-        private async Task SubscribeEvent(Contract contract, Func<HexBigInteger> currentProcessedBlockNumber, string wssPath, IWeb3 web3, Action<EventLog<PairCreatedEvent>> onTokenSwapNext, Action<HexBigInteger> onBlockUpdate)
+        private async Task SubscribeEvent(string wssPath, IWeb3 web3, Action<EventLog<PairCreatedEvent>> onTokenSwapNext)
         {
             var client = new StreamingWebSocketClient(wssPath);
             _disposables.Add(client);
-            var newBlockSub = new EthNewBlockHeadersObservableSubscription(client);
+            var filter = web3.Eth.GetEvent<PairCreatedEvent>(_sniperConfig.PancakeswapFactoryAddress).CreateFilterInput();
+            var filterTransfers = Event<PairCreatedEvent>.GetEventABI().CreateFilterInput();
+            filterTransfers.Address = new string[1] { _sniperConfig.PancakeswapFactoryAddress };
+            var subscription = new EthLogsObservableSubscription(client);
 
-            var processor = web3.Processing.Logs.CreateProcessorForContract<PairCreatedEvent>(contract.Address,
-                eventLog => CreateTokenPair(eventLog.Log, onTokenSwapNext));
+            _disposables.Add(subscription.GetSubscriptionDataResponsesAsObservable().Subscribe(t =>
+            {
+                var decodedEvent = t.DecodeEvent<PairCreatedEvent>();
+                onTokenSwapNext(decodedEvent);
+            }));
 
-            _disposables.Add(newBlockSub.GetSubscriptionDataResponsesAsObservable()
-                .Subscribe(newBlockEvent => _ = ReadLogs(processor, web3, contract, onTokenSwapNext, currentProcessedBlockNumber, newBlockEvent.Number, onBlockUpdate)));
             await client.StartAsync();
-            await newBlockSub.SubscribeAsync();
+            await subscription.SubscribeAsync(filter);
+            new Thread(() => KeepAliveClient(client)).Start();
         }
 
+        private void KeepAliveClient(StreamingWebSocketClient client)
+        {
+            while(!_disposed)
+            {
+                var handler = new EthBlockNumberObservableHandler(client);
+                var disposable = handler.GetResponseAsObservable().Subscribe(x => Log.Logger.Information("Current block: {0}", x.Value));
+                handler.SendRequestAsync().Wait(TimeSpan.FromMinutes(5));
+                Thread.Sleep(30000);
+            }
+        }
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            var bscBlockNumber = await _bscWeb3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
             var bscWalletPublicKey = EthECKey.GetPublicAddress(_sniperConfig.WalletPrivateKey);
-            void UpdateBscBlock(HexBigInteger newBscBlock)
-            {
-                _bscBlockNumber = newBscBlock;
-            }
-
-            await SubscribeEvent(_factoryContract, () => _bscBlockNumber, _sniperConfig.BscNode, _bscWeb3, (e) => _ = PairCreated(e).ConfigureAwait(false), UpdateBscBlock);
+            await SubscribeEvent(_sniperConfig.BscNode, _bscWeb3, (e) => _ = PairCreated(e).ConfigureAwait(false));
         }
 
         private async Task PairCreated(EventLog<PairCreatedEvent> pairCreated)
@@ -164,6 +139,7 @@ namespace BscTokenSniper
         public Task StopAsync(CancellationToken cancellationToken)
         {
             Log.Logger.Information("Stopping SniperService");
+            _disposed = true;
             _processingCancellation.Dispose();
             _disposables.ForEach(t => t.Dispose());
             return Task.CompletedTask;

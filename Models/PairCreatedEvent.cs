@@ -4,7 +4,7 @@ using System.Numerics;
 namespace BscTokenSniper.Models
 {
     [Event("PairCreated")]
-    public class PairCreatedEvent
+    public class PairCreatedEvent : IEventDTO
     {
         [Parameter("address", "token0", 1, true)]
         public string Token0 { get; set; }
