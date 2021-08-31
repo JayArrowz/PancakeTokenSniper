@@ -124,6 +124,10 @@ namespace BscTokenSniper.Handlers
         public async Task<BigInteger> GetMarketPrice(TokensOwned ownedToken)
         {
             var price = await _rugChecker.GetReserves(ownedToken.PairAddress);
+            if(price.Reserve0 == 0 || price.Reserve1 == 0)
+            {
+                return BigInteger.Zero;
+            }
             var pricePerLiquidityToken = ownedToken.TokenIdx == 1 ? new Fraction(price.Reserve1).Divide(price.Reserve0).ToDouble() : new Fraction(price.Reserve0).Divide(price.Reserve1).ToDouble();
             return new Fraction(pricePerLiquidityToken).Multiply(ownedToken.Amount).ToBigInteger();
         }
@@ -149,6 +153,7 @@ namespace BscTokenSniper.Handlers
                     if (profitPerc > _sniperConfig.ProfitPercentageMargin)
                     {
                         Sell(ownedToken.Address, ownedToken.TokenIdx, ownedToken.Amount, new Fraction(pricePerLiquidityToken).Multiply(ownedToken.Amount).ToBigInteger()).Wait();
+                        _ownedTokenList.Remove(ownedToken);
                     }
                 }
                 Thread.Sleep(TimeSpan.FromSeconds(5));
