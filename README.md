@@ -34,6 +34,7 @@ There are specific checks involved that this sniper does when buying tokens. Som
 2. The ability to scan contract source code and exclude buying from contracts when they include a specific string. The config key is called `ContractRugCheckStrings`
 3. Minimum amount of BNB (This can be changed to any other token by using `LiquidityPairAddress`) inside liquidity pool. The config key is called `MinLiquidityAmount`. 
 4. Ensures liquidty pair created has one of the `LiquidityPairAddress` address
+5. If `HoneypotCheck` is true the sniper will try to buy the `HoneypotCheckAmount`, then it will try to sell it. If this operation is successful it will buy the `SnipeAmount`
 
 ## Selling
 The Sniper automatically sells once a certain percentage of profit is made. This is defined in the config key `ProfitPercentageMargin`
@@ -55,6 +56,5 @@ See also the list of [contributors](https://github.com/JayArrowz/PancakeTokenSni
 ## TODO
 - Support Uniswap and other liquidity providers
 - Persist bought assets on Postgres
-- Honeypot test (Single buy and sell at a low price)
 - Target specific token addresses & detect when locked
 - Check for Renounce ownership
