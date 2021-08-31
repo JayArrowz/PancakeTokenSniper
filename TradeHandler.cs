@@ -40,7 +40,7 @@ namespace BscTokenSniper
             Start();
         }
 
-        public async Task Buy(string tokenAddress, int tokenIdx, string pairAddress, double amt)
+        public async Task<bool> Buy(string tokenAddress, int tokenIdx, string pairAddress, double amt)
         {
             try
             {
@@ -57,9 +57,9 @@ namespace BscTokenSniper
                 var swapEventList = reciept.DecodeAllEvents<SwapEvent>().Where(t => t.Event != null)
                     .Select(t => t.Event).ToList();
                 var swapEvent = swapEventList.FirstOrDefault();
-                var balance = tokenIdx == 0 ? swapEvent.Amount0Out : swapEvent.Amount1Out;
-                if (balance > 0)
+                if (swapEvent != null)
                 {
+                    var balance = tokenIdx == 0 ? swapEvent.Amount0Out : swapEvent.Amount1Out;
                     var erc20Contract = _bscWeb3.Eth.GetContract(_erc20Abi, tokenAddress);
                     var decimals = await erc20Contract.GetFunction("decimals").CallAsync<int>();
                     _ownedTokenList.Add(new TokensOwned
@@ -71,20 +71,28 @@ namespace BscTokenSniper
                         PairAddress = pairAddress,
                         Decimals = decimals
                     });
+                    return true;
                 }
+                return false;
             }
             catch (Exception e)
             {
                 Log.Logger.Error("Error buying", e);
+                return false;
             }
         }
 
-        public async Task Sell(string tokenAddress, int tokenIdx, BigInteger amount, BigInteger outAmount)
+        public TokensOwned GetOwnedTokens(string tokenAddress)
+        {
+            return _ownedTokenList.FirstOrDefault(t => t.Address == tokenAddress);
+        }
+
+        public async Task<bool> Sell(string tokenAddress, int tokenIdx, BigInteger amount, BigInteger outAmount)
         {
             try
             {
                 var sellFunction = _pancakeContract.GetFunction<SwapExactTokensForETHSupportingFeeOnTransferTokensFunction>();
-                
+
                 var gas = new HexBigInteger(_sniperConfig.GasAmount);
                 var transactionAmount = new BigInteger((decimal)amount).ToHexBigInteger();
                 var txId = await sellFunction.SendTransactionAsync(new SwapExactTokensForETHSupportingFeeOnTransferTokensFunction
@@ -105,12 +113,22 @@ namespace BscTokenSniper
                 {
                     var item = _ownedTokenList.FirstOrDefault(t => t.Address == tokenAddress);
                     _ownedTokenList.Remove(item);
+                    return true;
                 }
+                return false;
             }
             catch (Exception e)
             {
                 Log.Logger.Error("Error selling", e);
+                return false;
             }
+        }
+
+        public async Task<BigInteger> GetMarketPrice(TokensOwned ownedToken)
+        {
+            var price = await _rugChecker.GetReserves(ownedToken.PairAddress);
+            var pricePerLiquidityToken = ownedToken.TokenIdx == 1 ? new Fraction(price.Reserve1).Divide(price.Reserve0).ToDouble() : new Fraction(price.Reserve0).Divide(price.Reserve1).ToDouble();
+            return new Fraction(pricePerLiquidityToken).Multiply(ownedToken.Amount).ToBigInteger();
         }
 
         public void Start()

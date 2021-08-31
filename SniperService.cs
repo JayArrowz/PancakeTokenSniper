@@ -1,6 +1,7 @@
 ﻿using BscTokenSniper.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Nethereum.BlockchainProcessing;
 using Nethereum.Contracts;
 using Nethereum.Hex.HexTypes;
 using Nethereum.JsonRpc.WebSocketStreamingClient;
@@ -29,6 +30,7 @@ namespace BscTokenSniper
         private readonly RugChecker _rugChecker;
         private readonly TradeHandler _tradeHandler;
         private readonly CancellationTokenSource _processingCancellation = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        private Queue<BigInteger> _blockIdQueue;
 
         public SniperService(IOptions<SniperConfiguration> options, RugChecker rugChecker, TradeHandler tradeHandler)
         {
@@ -39,10 +41,8 @@ namespace BscTokenSniper
             _tradeHandler = tradeHandler;
         }
 
-        private async Task ReadLogs(IWeb3 web3, Contract contract, Action<EventLog<PairCreatedEvent>> tokenSwapEvent, Func<HexBigInteger> currentProcessedBlockNumber, HexBigInteger newBlockNumber, Action<HexBigInteger> onBlockUpdate)
+        private async Task ReadLogs(BlockchainProcessor processor, IWeb3 web3, Contract contract, Action<EventLog<PairCreatedEvent>> tokenSwapEvent, Func<HexBigInteger> currentProcessedBlockNumber, HexBigInteger newBlockNumber, Action<HexBigInteger> onBlockUpdate)
         {
-            var processor = web3.Processing.Logs.CreateProcessorForContract<PairCreatedEvent>(contract.Address,
-                eventLog => CreateTokenPair(eventLog.Log, tokenSwapEvent));
             var currentProcessedBlock = currentProcessedBlockNumber.Invoke();
             var isBehind = currentProcessedBlock != null && BigInteger.Subtract(newBlockNumber.Value, currentProcessedBlock.Value) > 1;
             if (isBehind)
@@ -62,7 +62,8 @@ namespace BscTokenSniper
                 await processor.ExecuteAsync(startAtBlockNumberIfNotProcessed: fromBlockNumber,
                     cancellationToken: _processingCancellation.Token,
                     toBlockNumber: newBlockNumber);
-            } catch(Exception e)
+            }
+            catch (Exception e)
             {
                 Serilog.Log.Logger.Error("Error processing block", e);
             }
@@ -86,8 +87,12 @@ namespace BscTokenSniper
             var client = new StreamingWebSocketClient(wssPath);
             _disposables.Add(client);
             var newBlockSub = new EthNewBlockHeadersObservableSubscription(client);
+
+            var processor = web3.Processing.Logs.CreateProcessorForContract<PairCreatedEvent>(contract.Address,
+                eventLog => CreateTokenPair(eventLog.Log, onTokenSwapNext));
+
             _disposables.Add(newBlockSub.GetSubscriptionDataResponsesAsObservable()
-                .Subscribe(newBlockEvent => _ = ReadLogs(web3, contract, onTokenSwapNext, currentProcessedBlockNumber, newBlockEvent.Number, onBlockUpdate)));
+                .Subscribe(newBlockEvent => _ = ReadLogs(processor, web3, contract, onTokenSwapNext, currentProcessedBlockNumber, newBlockEvent.Number, onBlockUpdate)));
             await client.StartAsync();
             await newBlockSub.SubscribeAsync();
         }
@@ -107,18 +112,54 @@ namespace BscTokenSniper
 
         private async Task PairCreated(EventLog<PairCreatedEvent> pairCreated)
         {
-            var pair = pairCreated.Event;
-            var symbol = await _rugChecker.GetSymbol(pair);
-            pair.Symbol = symbol;
-            var rugCheckPassed = _sniperConfig.RugCheckEnabled ? await _rugChecker.CheckRugAsync(pair) : true;
-            var otherPairAddress = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? pair.Token1 : pair.Token0;
-            var otherTokenIdx = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? 1 : 0;
-
-            Log.Logger.Information("Discovered Token Pair {0} Rug check Result: {1}", symbol, rugCheckPassed);
-            if (rugCheckPassed)
+            try
             {
-                Log.Logger.Information("Buying Token pair: {0}", symbol);
-                await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
+                var pair = pairCreated.Event;
+                var symbol = await _rugChecker.GetSymbol(pair);
+                pair.Symbol = symbol;
+                var rugCheckPassed = _sniperConfig.RugCheckEnabled ? await _rugChecker.CheckRugAsync(pair) : true;
+                var otherPairAddress = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? pair.Token1 : pair.Token0;
+                var otherTokenIdx = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? 1 : 0;
+                var honeypotCheck = _sniperConfig.HoneypotCheck;
+
+                Log.Logger.Information("Discovered Token Pair {0} Rug check Result: {1}", symbol, rugCheckPassed);
+                if (rugCheckPassed)
+                {
+                    Log.Logger.Information("Buying Token pair: {0}", symbol);
+
+                    if (!honeypotCheck)
+                    {
+                        await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
+                    }
+                    else
+                    {
+                        Log.Logger.Information("Starting Honeypot check for {0} with amount {1}", symbol, _sniperConfig.HoneypotCheckAmount);
+                    }
+                }
+
+                if (honeypotCheck)
+                {
+                    var buySuccess = await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.HoneypotCheckAmount);
+                    if (!buySuccess)
+                    {
+                        Log.Logger.Fatal("Honeypot check failed could not buy token: {0}", pair.Symbol);
+                        return;
+                    }
+                    var ownedToken = _tradeHandler.GetOwnedTokens(otherPairAddress);
+                    var marketPrice = await _tradeHandler.GetMarketPrice(ownedToken);
+                    var sellSuccess = await _tradeHandler.Sell(otherPairAddress, otherTokenIdx, ownedToken.Amount, marketPrice);
+                    if (!sellSuccess)
+                    {
+                        Log.Logger.Fatal("Honeypot check DETECTED HONEYPOT could not sell token: {0}", pair.Symbol);
+                        return;
+                    }
+
+                    Log.Logger.Fatal("Honeypot check PASSED buying token: {0}", pair.Symbol);
+                    await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
+                }
+            } catch(Exception e)
+            {
+                Log.Logger.Error(nameof(PairCreated), e);
             }
         }
 

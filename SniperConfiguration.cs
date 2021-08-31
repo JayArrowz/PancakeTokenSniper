@@ -22,5 +22,7 @@ namespace BscTokenSniper
         public double ProfitPercentageMargin { get; set; }
         public bool RenounceOwnershipCheck { get; set; }
         public decimal MinimumPercentageOfTokenInLiquidityPool { get; set; }
+        public bool HoneypotCheck { get; set; }
+        public double HoneypotCheckAmount { get; set; }
     }
 }
