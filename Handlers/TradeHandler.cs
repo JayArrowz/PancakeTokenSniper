@@ -25,6 +25,8 @@ namespace BscTokenSniper.Handlers
         private List<TokensOwned> _ownedTokenList = new();
         private bool _stopped;
         private readonly string _erc20Abi;
+        private readonly string _pairAbi;
+        private static BigInteger Max { get; } = BigInteger.Parse("115792089237316195423570985008687907853269984665640564039457584007913129639935");
 
         public TradeHandler(IOptions<SniperConfiguration> options, RugHandler rugChecker)
         {
@@ -32,12 +34,13 @@ namespace BscTokenSniper.Handlers
             _bscWeb3 = new Web3(url: _sniperConfig.BscHttpApi, account: new Account(_sniperConfig.WalletPrivateKey, new BigInteger(_sniperConfig.ChainId)));
             _bscWeb3.TransactionManager.UseLegacyAsDefault = true;
             _erc20Abi = File.ReadAllText("./Abis/Erc20.json");
+            _pairAbi = File.ReadAllText("./Abis/Pair.json");
             _pancakeContract = _bscWeb3.Eth.GetContract(File.ReadAllText("./Abis/Pancake.json"), _sniperConfig.PancakeswapRouterAddress);
             _rugChecker = rugChecker;
             Start();
         }
 
-        public async Task<bool> Buy(string tokenAddress, int tokenIdx, string pairAddress, double amt)
+        public async Task<bool> Buy(string tokenAddress, int tokenIdx, string pairAddress, double amt, bool honeypotCheck = false)
         {
             try
             {
@@ -66,7 +69,8 @@ namespace BscTokenSniper.Handlers
                         SinglePrice = new Fraction(balance).Divide(new Fraction(amount.Value)).ToDouble(),
                         TokenIdx = tokenIdx,
                         PairAddress = pairAddress,
-                        Decimals = decimals
+                        Decimals = decimals,
+                        HoneypotCheck = honeypotCheck
                     });
                     return true;
                 }
@@ -88,10 +92,24 @@ namespace BscTokenSniper.Handlers
         {
             try
             {
+                var pairContract = _bscWeb3.Eth.GetContract(_pairAbi, tokenAddress);
+
+                var approveFunction = pairContract.GetFunction<ApproveFunction>();
                 var sellFunction = _pancakeContract.GetFunction<SwapExactTokensForETHSupportingFeeOnTransferTokensFunction>();
 
                 var gas = new HexBigInteger(_sniperConfig.GasAmount);
                 var transactionAmount = new BigInteger((decimal)amount).ToHexBigInteger();
+                try
+                {
+                    var approve = await approveFunction.SendTransactionAndWaitForReceiptAsync(new ApproveFunction
+                    {
+                        Spender = _sniperConfig.PancakeswapRouterAddress,
+                        Value = Max
+                    }, _sniperConfig.WalletAddress, gas, new HexBigInteger(BigInteger.Zero));
+                } catch(Exception e)
+                {
+                    Serilog.Log.Logger.Warning("Could not approve sell for {0}", tokenAddress);
+                }
                 var txId = await sellFunction.SendTransactionAsync(new SwapExactTokensForETHSupportingFeeOnTransferTokensFunction
                 {
                     AmountOutMin = outAmount,
@@ -144,6 +162,10 @@ namespace BscTokenSniper.Handlers
                 for (int i = _ownedTokenList.Count - 1; i >= 0; i--)
                 {
                     var ownedToken = _ownedTokenList[i];
+                    if(ownedToken.FailedSell || ownedToken.HoneypotCheck)
+                    {
+                        continue;
+                    }
                     var price = _rugChecker.GetReserves(ownedToken.PairAddress).Result;
                     var pricePerLiquidityToken = ownedToken.TokenIdx == 1 ? new Fraction(price.Reserve1).Divide(price.Reserve0).ToDouble() : new Fraction(price.Reserve0).Divide(price.Reserve1).ToDouble();
                     var profitPerc = 100.0 - ((100.0 / ownedToken.SinglePrice) * pricePerLiquidityToken);
@@ -152,7 +174,14 @@ namespace BscTokenSniper.Handlers
 
                     if (profitPerc > _sniperConfig.ProfitPercentageMargin)
                     {
-                        Sell(ownedToken.Address, ownedToken.TokenIdx, ownedToken.Amount, new Fraction(pricePerLiquidityToken).Multiply(ownedToken.Amount).ToBigInteger()).Wait();
+                        try
+                        {
+                            ownedToken.FailedSell = !Sell(ownedToken.Address, ownedToken.TokenIdx, ownedToken.Amount, new Fraction(pricePerLiquidityToken).Multiply(ownedToken.Amount).ToBigInteger()).Result;
+                        } catch(Exception e)
+                        {
+                            Serilog.Log.Logger.Error(nameof(MonitorPrices), e);
+                            ownedToken.FailedSell = true;
+                        }
                         _ownedTokenList.Remove(ownedToken);
                     }
                 }

@@ -11,5 +11,7 @@ namespace BscTokenSniper.Models
         public int TokenIdx { get; set; }
         public string PairAddress { get; set; }
         public int Decimals { get; set; }
+        public bool HoneypotCheck { get; set; }
+        public bool FailedSell { get; set; }
     }
 }

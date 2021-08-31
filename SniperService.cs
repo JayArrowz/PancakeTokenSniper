@@ -120,7 +120,15 @@ namespace BscTokenSniper
                 }
                 var ownedToken = _tradeHandler.GetOwnedTokens(otherPairAddress);
                 var marketPrice = await _tradeHandler.GetMarketPrice(ownedToken);
-                var sellSuccess = await _tradeHandler.Sell(otherPairAddress, otherTokenIdx, ownedToken.Amount, marketPrice);
+                var sellSuccess = false;
+
+                try
+                {
+                    sellSuccess = await _tradeHandler.Sell(otherPairAddress, otherTokenIdx, ownedToken.Amount, marketPrice);
+                } catch(Exception e)
+                {
+                    Serilog.Log.Error("Error Sell", e);
+                }
                 if (!sellSuccess)
                 {
                     Log.Logger.Fatal("Honeypot check DETECTED HONEYPOT could not sell token: {0}", pair.Symbol);
