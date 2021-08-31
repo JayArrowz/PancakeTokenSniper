@@ -112,7 +112,7 @@ namespace BscTokenSniper
                     return;
                 }
                 Log.Logger.Information("Starting Honeypot check for {0} with amount {1}", symbol, _sniperConfig.HoneypotCheckAmount);
-                var buySuccess = await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.HoneypotCheckAmount);
+                var buySuccess = await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.HoneypotCheckAmount, true);
                 if (!buySuccess)
                 {
                     Log.Logger.Fatal("Honeypot check failed could not buy token: {0}", pair.Symbol);
