@@ -124,41 +124,38 @@ namespace BscTokenSniper
                 var honeypotCheck = _sniperConfig.HoneypotCheck;
 
                 Log.Logger.Information("Discovered Token Pair {0} Rug check Result: {1}", symbol, rugCheckPassed);
-                if (rugCheckPassed)
+                if (!rugCheckPassed)
+                {
+                    Log.Logger.Warning("Rug Check failed for {0}", symbol);
+                    return;
+                }
+
+                if (!honeypotCheck)
                 {
                     Log.Logger.Information("Buying Token pair: {0}", symbol);
-
-                    if (!honeypotCheck)
-                    {
-                        await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
-                    }
-                    else
-                    {
-                        Log.Logger.Information("Starting Honeypot check for {0} with amount {1}", symbol, _sniperConfig.HoneypotCheckAmount);
-                    }
-                }
-
-                if (honeypotCheck)
-                {
-                    var buySuccess = await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.HoneypotCheckAmount);
-                    if (!buySuccess)
-                    {
-                        Log.Logger.Fatal("Honeypot check failed could not buy token: {0}", pair.Symbol);
-                        return;
-                    }
-                    var ownedToken = _tradeHandler.GetOwnedTokens(otherPairAddress);
-                    var marketPrice = await _tradeHandler.GetMarketPrice(ownedToken);
-                    var sellSuccess = await _tradeHandler.Sell(otherPairAddress, otherTokenIdx, ownedToken.Amount, marketPrice);
-                    if (!sellSuccess)
-                    {
-                        Log.Logger.Fatal("Honeypot check DETECTED HONEYPOT could not sell token: {0}", pair.Symbol);
-                        return;
-                    }
-
-                    Log.Logger.Fatal("Honeypot check PASSED buying token: {0}", pair.Symbol);
                     await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
+                    return;
                 }
-            } catch(Exception e)
+                Log.Logger.Information("Starting Honeypot check for {0} with amount {1}", symbol, _sniperConfig.HoneypotCheckAmount);
+                var buySuccess = await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.HoneypotCheckAmount);
+                if (!buySuccess)
+                {
+                    Log.Logger.Fatal("Honeypot check failed could not buy token: {0}", pair.Symbol);
+                    return;
+                }
+                var ownedToken = _tradeHandler.GetOwnedTokens(otherPairAddress);
+                var marketPrice = await _tradeHandler.GetMarketPrice(ownedToken);
+                var sellSuccess = await _tradeHandler.Sell(otherPairAddress, otherTokenIdx, ownedToken.Amount, marketPrice);
+                if (!sellSuccess)
+                {
+                    Log.Logger.Fatal("Honeypot check DETECTED HONEYPOT could not sell token: {0}", pair.Symbol);
+                    return;
+                }
+
+                Log.Logger.Fatal("Honeypot check PASSED buying token: {0}", pair.Symbol);
+                await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
+            }
+            catch (Exception e)
             {
                 Log.Logger.Error(nameof(PairCreated), e);
             }
