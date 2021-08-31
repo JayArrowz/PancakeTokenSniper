@@ -31,11 +31,18 @@ namespace BscTokenSniper
             _pairContractStr = File.ReadAllText("./Abis/Pair.json");
         }
 
+        public async Task<string> GetSymbol(PairCreatedEvent pairCreatedEvent)
+        {
+            var otherPairAddress = pairCreatedEvent.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ?
+                pairCreatedEvent.Token1 : pairCreatedEvent.Token0;
+            return await _bscWeb3.Eth.GetContract(_erc20Abi, otherPairAddress).GetFunction("symbol").CallAsync<string>();
+        }
+
         public async Task<bool> CheckRugAsync(PairCreatedEvent pairCreatedEvent)
         {
             if (pairCreatedEvent.Token0 != _sniperConfig.LiquidityPairAddress && pairCreatedEvent.Token1 != _sniperConfig.LiquidityPairAddress)
             {
-                Serilog.Log.Logger.Information("Target liquidity pair found for pair: {0} - {1}. Not bought", pairCreatedEvent.Token0, pairCreatedEvent.Token0);
+                Serilog.Log.Logger.Warning("Target liquidity pair found for pair: {0} - {1}. Not bought", pairCreatedEvent.Token0, pairCreatedEvent.Token0);
                 return false;
             }
 
@@ -61,7 +68,7 @@ namespace BscTokenSniper
             var amountStr = Web3.Convert.FromWei(totalAmount).ToString();
             if (!result)
             {
-                Serilog.Log.Logger.Information("Not enough liquidity added to token {0}. Not buying. Only {1} liquidity added", pair, amountStr);
+                Serilog.Log.Logger.Warning("Not enough liquidity added to token {0}. Not buying. Only {1} liquidity added", pair, amountStr);
                 return result;
             }
             else
@@ -75,7 +82,7 @@ namespace BscTokenSniper
                 var totalTokenAmount = await _bscWeb3.Eth.GetContract(_erc20Abi, pairCreatedEvent.Pair).GetFunction("totalSupply").CallAsync<BigInteger>();
                 var percentageInPool = new Fraction(tokenAmountInPool).Divide(totalTokenAmount).Multiply(100);
                 result = ((decimal)percentageInPool) > _sniperConfig.MinimumPercentageOfTokenInLiquidityPool;
-                Serilog.Log.Logger.Information("Token {0} Token Amount in Pool: {1} Total Supply: {2} Total Percentage in pool: {3}% Min Percentage Liquidity Check Status: {4}", pairCreatedEvent.Pair, tokenAmountInPool, totalTokenAmount, percentageInPool, result);
+                Serilog.Log.Logger.Information("Token {0} Token Amount in Pool: {1} Total Supply: {2} Total Percentage in pool: {3}% Min Percentage Liquidity Check Status: {4}", pairCreatedEvent.Pair, tokenAmountInPool, totalTokenAmount, percentageInPool.ToDouble(), result);
             }
             return result;
         }
@@ -93,7 +100,7 @@ namespace BscTokenSniper
             var innerResult = jObject["result"][0];
             if (innerResult["ABI"].Value<string>() == "Contract source code not verified")
             {
-                Serilog.Log.Logger.Information("Bsc contract is not verified for token {0}", otherTokenAddress);
+                Serilog.Log.Logger.Warning("Bsc contract is not verified for token {0}", otherTokenAddress);
                 return false;
             }
 
@@ -106,7 +113,7 @@ namespace BscTokenSniper
             var containsRugCheckStrings = _sniperConfig.ContractRugCheckStrings.FirstOrDefault(t => innerResult["SourceCode"].Contains(t));
             if (!string.IsNullOrEmpty(containsRugCheckStrings))
             {
-                Serilog.Log.Logger.Information("Failed rug check for token {0}, contains string: {1}", otherTokenAddress, containsRugCheckStrings);
+                Serilog.Log.Logger.Warning("Failed rug check for token {0}, contains string: {1}", otherTokenAddress, containsRugCheckStrings);
                 return false;
             }
 

@@ -17,5 +17,7 @@ namespace BscTokenSniper.Models
 
         [Parameter("uint256", "", 4, false)]
         public BigInteger Amount { get; set; }
+
+        public string Symbol { get; set; }
     }
 }

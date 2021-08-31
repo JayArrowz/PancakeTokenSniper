@@ -1,5 +1,6 @@
 ﻿using BscTokenSniper.Models;
 using Fractions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Nethereum.Contracts;
 using Nethereum.Hex.HexTypes;
@@ -18,13 +19,14 @@ using System.Threading.Tasks;
 
 namespace BscTokenSniper
 {
-    public class TradeHandler
+    public class TradeHandler : IDisposable
     {
         private readonly SniperConfiguration _sniperConfig;
         private readonly Web3 _bscWeb3;
         private readonly Contract _pancakeContract;
         private readonly RugChecker _rugChecker;
         private List<TokensOwned> _ownedTokenList = new();
+        private bool _stopped;
         private readonly string _erc20Abi;
 
         public TradeHandler(IOptions<SniperConfiguration> options, RugChecker rugChecker)
@@ -38,13 +40,13 @@ namespace BscTokenSniper
             Start();
         }
 
-        public async Task Buy(string tokenAddress, int tokenIdx, string pairAddress)
+        public async Task Buy(string tokenAddress, int tokenIdx, string pairAddress, double amt)
         {
             try
             {
                 var buyFunction = _pancakeContract.GetFunction("swapExactETHForTokens");
                 var gas = new HexBigInteger(_sniperConfig.GasAmount);
-                var amount = new HexBigInteger(Web3.Convert.ToWei(_sniperConfig.AmountToSnipe));
+                var amount = new HexBigInteger(Web3.Convert.ToWei(amt));
                 var buyReturnValue = await buyFunction.SendTransactionAsync(_sniperConfig.WalletAddress, gas, amount, 0,
                     new string[] { _sniperConfig.LiquidityPairAddress, tokenAddress },
                     _sniperConfig.WalletAddress,
@@ -118,7 +120,7 @@ namespace BscTokenSniper
 
         private void MonitorPrices()
         {
-            while (true)
+            while (!_stopped)
             {
                 for (int i = _ownedTokenList.Count - 1; i >= 0; i--)
                 {
@@ -136,6 +138,11 @@ namespace BscTokenSniper
                 }
                 Thread.Sleep(TimeSpan.FromSeconds(5));
             }
+        }
+
+        public void Dispose()
+        {
+            _stopped = true;
         }
     }
 }

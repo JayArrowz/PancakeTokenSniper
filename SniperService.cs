@@ -55,7 +55,7 @@ namespace BscTokenSniper
                     new HexBigInteger(BigInteger.Subtract(newBlockNumber.Value, new BigInteger(1)))
                     : (isBehind ? currentProcessedBlock : newBlockNumber);
 
-            Log.Logger.Information("Reading Logs from Block: {fromBlockNumber} to {newBlockNumber}, Contract address: {Address}", fromBlockNumber, newBlockNumber, contract.Address);
+            Log.Logger.Information("Reading Logs from Block: {fromBlockNumber} to {newBlockNumber}", fromBlockNumber, newBlockNumber);
             onBlockUpdate.Invoke(newBlockNumber);
             try
             {
@@ -67,14 +67,14 @@ namespace BscTokenSniper
                 Serilog.Log.Logger.Error("Error processing block", e);
             }
 
-            Log.Logger.Information("Processed: {fromBlockNumber} to {newBlockNumber}, Contract address: {Address}", fromBlockNumber, newBlockNumber, contract.Address);
+            Log.Logger.Debug("Processed: {fromBlockNumber} to {newBlockNumber}, Contract address: {Address}", fromBlockNumber, newBlockNumber, contract.Address);
 
         }
 
         private void CreateTokenPair(FilterLog log, Action<EventLog<PairCreatedEvent>> onNext)
         {
             var pairCreated = log.DecodeEvent<PairCreatedEvent>();
-            Log.Logger.Information("Pair Created Event: {@log} Data: {@pairCreated}", log, pairCreated);
+            Log.Logger.Information("Pair Created Event Found: {@log} Data: {@pairCreated}", log, pairCreated);
             if (onNext != null)
             {
                 onNext.Invoke(pairCreated);
@@ -108,16 +108,17 @@ namespace BscTokenSniper
         private async Task PairCreated(EventLog<PairCreatedEvent> pairCreated)
         {
             var pair = pairCreated.Event;
+            var symbol = await _rugChecker.GetSymbol(pair);
+            pair.Symbol = symbol;
             var rugCheckPassed = _sniperConfig.RugCheckEnabled ? await _rugChecker.CheckRugAsync(pair) : true;
             var otherPairAddress = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? pair.Token1 : pair.Token0;
             var otherTokenIdx = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? 1 : 0;
 
-            Log.Logger.Information("Rug Checked Pair: {0} - {1} Result: {2}", pair.Token0, pair.Token1, rugCheckPassed);
-
+            Log.Logger.Information("Discovered Token Pair {0} Rug check Result: {1}", symbol, rugCheckPassed);
             if (rugCheckPassed)
             {
-                Log.Logger.Information("Buying Token pair: {0} : {1}", pair.Token0, pair.Token1);
-                await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair);
+                Log.Logger.Information("Buying Token pair: {0}", symbol);
+                await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
             }
         }
 
