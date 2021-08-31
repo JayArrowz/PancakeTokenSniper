@@ -11,9 +11,9 @@ using System.Net.Http;
 using System.Numerics;
 using System.Threading.Tasks;
 
-namespace BscTokenSniper
+namespace BscTokenSniper.Handlers
 {
-    public class RugChecker
+    public class RugHandler
     {
         private readonly string GetSourceUrl = "https://api.bscscan.com/api?module=contract&action=getsourcecode&address={0}&apikey={1}";
         private HttpClient _httpClient;
@@ -22,7 +22,7 @@ namespace BscTokenSniper
         private readonly Web3 _bscWeb3;
         private readonly string _pairContractStr;
 
-        public RugChecker(IOptions<SniperConfiguration> sniperConfig, IHttpClientFactory httpClientFactory)
+        public RugHandler(IOptions<SniperConfiguration> sniperConfig, IHttpClientFactory httpClientFactory)
         {
             _httpClient = httpClientFactory.CreateClient();
             _sniperConfig = sniperConfig.Value;
@@ -63,7 +63,7 @@ namespace BscTokenSniper
             var currentPair = pairCreatedEvent.Pair;
             var reserves = await GetReserves(currentPair);
             var totalAmount = pairCreatedEvent.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? reserves.Reserve0 : reserves.Reserve1;
-                        
+
             var result = totalAmount >= Web3.Convert.ToWei(_sniperConfig.MinLiquidityAmount);
             var amountStr = Web3.Convert.FromWei(totalAmount).ToString();
             if (!result)
@@ -76,7 +76,7 @@ namespace BscTokenSniper
                 Serilog.Log.Logger.Information("Min Liqudity check for {0} token passed. Liqudity amount: {1}", currentPair, amountStr);
             }
 
-            if(_sniperConfig.MinimumPercentageOfTokenInLiquidityPool > 0)
+            if (_sniperConfig.MinimumPercentageOfTokenInLiquidityPool > 0)
             {
                 var tokenAmountInPool = otherPairIdx == 1 ? reserves.Reserve1 : reserves.Reserve0;
                 var totalTokenAmount = await _bscWeb3.Eth.GetContract(_erc20Abi, pairCreatedEvent.Pair).GetFunction("totalSupply").CallAsync<BigInteger>();

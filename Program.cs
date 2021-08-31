@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using BscTokenSniper.Handlers;
+using BscTokenSniper.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Newtonsoft.Json;
 using Serilog;
@@ -30,7 +32,7 @@ namespace BscTokenSniper
             logger.Information("Running BSC Token Sniper with Args: @{args}", args);
             services.AddHttpClient();
             services.AddSingleton<TradeHandler>();
-            services.AddSingleton<RugChecker>();
+            services.AddSingleton<RugHandler>();
             services.Configure<SniperConfiguration>(config.GetSection("SniperConfiguration"));
             services.AddHostedService<SniperService>();
         });

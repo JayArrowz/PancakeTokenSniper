@@ -1,11 +1,8 @@
 ﻿using BscTokenSniper.Models;
 using Fractions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Nethereum.Contracts;
 using Nethereum.Hex.HexTypes;
-using Nethereum.RPC.Eth.DTOs;
-using Nethereum.Util;
 using Nethereum.Web3;
 using Nethereum.Web3.Accounts;
 using Serilog;
@@ -17,19 +14,19 @@ using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BscTokenSniper
+namespace BscTokenSniper.Handlers
 {
     public class TradeHandler : IDisposable
     {
         private readonly SniperConfiguration _sniperConfig;
         private readonly Web3 _bscWeb3;
         private readonly Contract _pancakeContract;
-        private readonly RugChecker _rugChecker;
+        private readonly RugHandler _rugChecker;
         private List<TokensOwned> _ownedTokenList = new();
         private bool _stopped;
         private readonly string _erc20Abi;
 
-        public TradeHandler(IOptions<SniperConfiguration> options, RugChecker rugChecker)
+        public TradeHandler(IOptions<SniperConfiguration> options, RugHandler rugChecker)
         {
             _sniperConfig = options.Value;
             _bscWeb3 = new Web3(url: _sniperConfig.BscHttpApi, account: new Account(_sniperConfig.WalletPrivateKey, new BigInteger(_sniperConfig.ChainId)));

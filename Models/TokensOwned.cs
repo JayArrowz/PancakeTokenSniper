@@ -1,7 +1,7 @@
 ﻿using Nethereum.Util;
 using System.Numerics;
 
-namespace BscTokenSniper
+namespace BscTokenSniper.Models
 {
     public class TokensOwned
     {

@@ -1,4 +1,5 @@
-﻿using BscTokenSniper.Models;
+﻿using BscTokenSniper.Handlers;
+using BscTokenSniper.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Nethereum.BlockchainProcessing;
@@ -27,12 +28,12 @@ namespace BscTokenSniper
         private SniperConfiguration _sniperConfig;
         private HexBigInteger _bscBlockNumber;
         private readonly List<IDisposable> _disposables = new();
-        private readonly RugChecker _rugChecker;
+        private readonly RugHandler _rugChecker;
         private readonly TradeHandler _tradeHandler;
         private readonly CancellationTokenSource _processingCancellation = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         private Queue<BigInteger> _blockIdQueue;
 
-        public SniperService(IOptions<SniperConfiguration> options, RugChecker rugChecker, TradeHandler tradeHandler)
+        public SniperService(IOptions<SniperConfiguration> options, RugHandler rugChecker, TradeHandler tradeHandler)
         {
             _sniperConfig = options.Value;
             _bscWeb3 = new Web3(url: _sniperConfig.BscHttpApi, account: new Account(_sniperConfig.WalletPrivateKey));

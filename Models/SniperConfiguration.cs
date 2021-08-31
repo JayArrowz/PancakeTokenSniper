@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace BscTokenSniper
+namespace BscTokenSniper.Models
 {
     public class SniperConfiguration
     {
