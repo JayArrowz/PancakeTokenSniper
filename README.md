@@ -56,3 +56,5 @@ See also the list of [contributors](https://github.com/JayArrowz/PancakeTokenSni
 - Support Uniswap and other liquidity providers
 - Persist bought assets on Postgres
 - Honeypot test (Single buy and sell at a low price)
+- Target specific token addresses & detect when locked
+- Check for Renounce ownership
