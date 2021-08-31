@@ -7,7 +7,7 @@ This is a free project but any funding is appricated.
 ETH/BNB: 0x71f74dEbb7fd42E61de32256537284E06DE8812d
 
 ## Socials
-Telegram: https://t.me/joinchat/pW9TyMXOkx03Nzg0
+Telegram: https://t.me/PancakeTokenSniper
 
 ## Prerequisites
 * [Net5.0](https://dotnet.microsoft.com/download/dotnet/5.0) (Only need this if you are trying to run the code otherwise please see [releases](https://github.com/JayArrowz/PancakeTokenSniper/releases) it provides binaries)
