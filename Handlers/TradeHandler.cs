@@ -179,7 +179,7 @@ namespace BscTokenSniper.Handlers
                     {
                         continue;
                     }
-                    var pricePerLiquidityToken = ownedToken.TokenIdx == 1 ? new Fraction(price.Reserve1).Divide(price.Reserve0).ToDouble() : new Fraction(price.Reserve0).Divide(price.Reserve1).ToDouble();
+                    var pricePerLiquidityToken = ownedToken.TokenIdx == 1 ? new Fraction(price.Reserve0).Divide(price.Reserve1).ToDouble() : new Fraction(price.Reserve1).Divide(price.Reserve0).ToDouble();
                     var profitPerc = ((100.0 / ownedToken.SinglePrice) * pricePerLiquidityToken) - 100.0;
                     Log.Logger.Information("Token: {0} Price bought: {1} Current Price: {2} Current Profit: {3}%",
                         ownedToken.Address, ownedToken.SinglePrice, pricePerLiquidityToken, profitPerc);

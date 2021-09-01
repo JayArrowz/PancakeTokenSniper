@@ -72,11 +72,15 @@ namespace BscTokenSniper
 
         private void KeepAliveClient(StreamingWebSocketClient client)
         {
-            while(!_disposed)
+            while (!_disposed)
             {
                 var handler = new EthBlockNumberObservableHandler(client);
                 var disposable = handler.GetResponseAsObservable().Subscribe(x => Log.Logger.Information("Current block: {0}", x.Value));
-                handler.SendRequestAsync().Wait(TimeSpan.FromMinutes(5));
+                try
+                {
+                    handler.SendRequestAsync().Wait(TimeSpan.FromMinutes(5));
+                }
+                catch (Exception _){ }
                 Thread.Sleep(30000);
             }
         }
@@ -127,7 +131,8 @@ namespace BscTokenSniper
                 try
                 {
                     sellSuccess = await _tradeHandler.Sell(otherPairAddress, ownedToken.Amount - 1, marketPrice, _sniperConfig.SellSlippage);
-                } catch(Exception e)
+                }
+                catch (Exception e)
                 {
                     Serilog.Log.Error("Error Sell", e);
                 }
