@@ -14,6 +14,7 @@ using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -98,7 +99,7 @@ namespace BscTokenSniper
                 var otherTokenIdx = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? 1 : 0;
                 var honeypotCheck = _sniperConfig.HoneypotCheck;
 
-                Log.Logger.Information("Discovered Token Pair {0} Rug check Result: {1}", symbol, rugCheckPassed);
+                Log.Logger.Information("Discovered Token Pair {0} Rug check Result: {1} Contract address: {2}", symbol, rugCheckPassed, otherPairAddress);
                 if (!rugCheckPassed)
                 {
                     Log.Logger.Warning("Rug Check failed for {0}", symbol);
@@ -119,12 +120,13 @@ namespace BscTokenSniper
                     return;
                 }
                 var ownedToken = _tradeHandler.GetOwnedTokens(otherPairAddress);
-                var marketPrice = await _tradeHandler.GetMarketPrice(ownedToken);
+                await _tradeHandler.Approve(otherPairAddress);
+                var marketPrice = await _tradeHandler.GetMarketPrice(ownedToken, ownedToken.Amount - 1);
                 var sellSuccess = false;
 
                 try
                 {
-                    sellSuccess = await _tradeHandler.Sell(otherPairAddress, otherTokenIdx, ownedToken.Amount, marketPrice);
+                    sellSuccess = await _tradeHandler.Sell(otherPairAddress, ownedToken.Amount - 1, marketPrice, _sniperConfig.SellSlippage);
                 } catch(Exception e)
                 {
                     Serilog.Log.Error("Error Sell", e);
@@ -135,7 +137,7 @@ namespace BscTokenSniper
                     return;
                 }
 
-                Log.Logger.Fatal("Honeypot check PASSED buying token: {0}", pair.Symbol);
+                Log.Logger.Information("Honeypot check PASSED buying token: {0}", pair.Symbol);
                 await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
             }
             catch (Exception e)

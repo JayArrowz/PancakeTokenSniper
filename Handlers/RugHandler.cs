@@ -80,6 +80,11 @@ namespace BscTokenSniper.Handlers
             {
                 var tokenAmountInPool = otherPairIdx == 1 ? reserves.Reserve1 : reserves.Reserve0;
                 var totalTokenAmount = await _bscWeb3.Eth.GetContract(_erc20Abi, pairCreatedEvent.Pair).GetFunction("totalSupply").CallAsync<BigInteger>();
+                if(totalTokenAmount == 0)
+                {
+                    Serilog.Log.Logger.Error("Token {0} contract is giving a invalid supply", pairCreatedEvent.Pair);
+                    return false;
+                }
                 var percentageInPool = new Fraction(tokenAmountInPool).Divide(totalTokenAmount).Multiply(100);
                 result = ((decimal)percentageInPool) > _sniperConfig.MinimumPercentageOfTokenInLiquidityPool;
                 Serilog.Log.Logger.Information("Token {0} Token Amount in Pool: {1} Total Supply: {2} Total Percentage in pool: {3}% Min Percentage Liquidity Check Status: {4}", pairCreatedEvent.Pair, tokenAmountInPool, totalTokenAmount, percentageInPool.ToDouble(), result);
