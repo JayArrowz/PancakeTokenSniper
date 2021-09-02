@@ -183,9 +183,15 @@ namespace BscTokenSniper.Handlers
                     var profitPerc = ((100.0 / ownedToken.SinglePrice) * pricePerLiquidityToken) - 100.0;
                     Log.Logger.Information("Token: {0} Price bought: {1} Current Price: {2} Current Profit: {3}%",
                         ownedToken.Address, ownedToken.SinglePrice, pricePerLiquidityToken, profitPerc);
+                    var stopLoss = -profitPerc >= _sniperConfig.StopLossPercentage;
 
-                    if (profitPerc > _sniperConfig.ProfitPercentageMargin)
+                    if (profitPerc >= _sniperConfig.ProfitPercentageMargin || stopLoss)
                     {
+                        if (stopLoss)
+                        {
+                            Log.Logger.Information("Stop loss hit for token {0} Loss: {1}", ownedToken.Address, profitPerc);
+                        }
+
                         try
                         {
                             ownedToken.FailedSell = !Sell(ownedToken.Address, ownedToken.Amount - 1, GetMarketPrice(ownedToken, ownedToken.Amount - 1).Result, _sniperConfig.SellSlippage).Result;

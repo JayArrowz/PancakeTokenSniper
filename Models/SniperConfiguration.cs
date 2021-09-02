@@ -25,5 +25,6 @@ namespace BscTokenSniper.Models
         public bool HoneypotCheck { get; set; }
         public double HoneypotCheckAmount { get; set; }
         public double SellSlippage { get; set; }
+        public double StopLossPercentage { get; set; }
     }
 }
