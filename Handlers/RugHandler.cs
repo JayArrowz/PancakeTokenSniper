@@ -16,12 +16,12 @@ namespace BscTokenSniper.Handlers
     public class RugHandler
     {
         private readonly string GetSourceUrl = "https://api.bscscan.com/api?module=contract&action=getsourcecode&address={0}&apikey={1}";
+        private readonly string RugdocCheckUrl = "https://honeypot.api.rugdoc.io/api/honeypotStatus.js?address={0}&chain=bsc";
         private HttpClient _httpClient;
         private SniperConfiguration _sniperConfig;
         private readonly string _erc20Abi;
         private readonly Web3 _bscWeb3;
         private readonly string _pairContractStr;
-
         public RugHandler(IOptions<SniperConfiguration> sniperConfig, IHttpClientFactory httpClientFactory)
         {
             _httpClient = httpClientFactory.CreateClient();
@@ -29,6 +29,28 @@ namespace BscTokenSniper.Handlers
             _erc20Abi = File.ReadAllText("./Abis/Erc20.json");
             _bscWeb3 = new Web3(url: _sniperConfig.BscHttpApi, account: new Account(_sniperConfig.WalletPrivateKey));
             _pairContractStr = File.ReadAllText("./Abis/Pair.json");
+        }
+
+        public async Task<bool> RugdocCheck(string token)
+        {
+            if(!_sniperConfig.RugdocCheckEnabled)
+            {
+                return true;
+            }
+            try
+            {
+                var response = await _httpClient.GetAsync(string.Format(RugdocCheckUrl, token));
+                var rugdocStr = await response.Content.ReadAsStringAsync();
+                var responseObject = JObject.Parse(rugdocStr);
+                var valid = responseObject["status"].Value<string>().Equals("OK", StringComparison.InvariantCultureIgnoreCase);
+                Serilog.Log.Logger.Information("Rugdoc check token {0} Status: {1} RugDoc Response: {2}", token, valid, rugdocStr);
+                return valid;
+            }
+            catch (Exception e)
+            {
+                Serilog.Log.Error(nameof(RugdocCheck), e);
+                return false;
+            }
         }
 
         public async Task<string> GetSymbol(PairCreatedEvent pairCreatedEvent)
@@ -51,6 +73,7 @@ namespace BscTokenSniper.Handlers
             var otherPairIdx = pairCreatedEvent.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ?
                 1 : 0;
             Task<bool>[] rugCheckerTasks = new Task<bool>[] {
+                RugdocCheck(otherPairAddress),
                 CheckContractVerified(otherPairAddress),
                 CheckMinLiquidity(pairCreatedEvent, otherPairAddress, otherPairIdx)
             };
@@ -80,7 +103,7 @@ namespace BscTokenSniper.Handlers
             {
                 var tokenAmountInPool = otherPairIdx == 1 ? reserves.Reserve1 : reserves.Reserve0;
                 var totalTokenAmount = await _bscWeb3.Eth.GetContract(_erc20Abi, pairCreatedEvent.Pair).GetFunction("totalSupply").CallAsync<BigInteger>();
-                if(totalTokenAmount == 0)
+                if (totalTokenAmount == 0)
                 {
                     Serilog.Log.Logger.Error("Token {0} contract is giving a invalid supply", pairCreatedEvent.Pair);
                     return false;
