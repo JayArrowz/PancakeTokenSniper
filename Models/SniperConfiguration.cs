@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Numerics;
 
 namespace BscTokenSniper.Models
 {
     public class SniperConfiguration
     {
+        public string V1PancakeswapRouterAddress { get; set; }
         public string[] ContractRugCheckStrings { get; set; }
         public string WalletAddress { get; set; }
         public string WalletPrivateKey { get; set; }
@@ -26,5 +28,7 @@ namespace BscTokenSniper.Models
         public double HoneypotCheckAmount { get; set; }
         public double SellSlippage { get; set; }
         public bool RugdocCheckEnabled { get; set; }
+        public string[] DeadWallets { get; set; }
+        public string[] WhitelistedTokens { get; set; }
     }
 }

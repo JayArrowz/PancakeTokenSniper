@@ -81,7 +81,7 @@ namespace BscTokenSniper.Handlers
             return rugCheckerTasks.All(t => t.IsCompletedSuccessfully && t.Result);
         }
 
-        private async Task<bool> CheckMinLiquidity(PairCreatedEvent pairCreatedEvent, string pair, int otherPairIdx)
+        private async Task<bool> CheckMinLiquidity(PairCreatedEvent pairCreatedEvent, string token, int otherPairIdx)
         {
             var currentPair = pairCreatedEvent.Pair;
             var reserves = await GetReserves(currentPair);
@@ -91,7 +91,7 @@ namespace BscTokenSniper.Handlers
             var amountStr = Web3.Convert.FromWei(totalAmount).ToString();
             if (!result)
             {
-                Serilog.Log.Logger.Warning("Not enough liquidity added to token {0}. Not buying. Only {1} liquidity added", pair, amountStr);
+                Serilog.Log.Logger.Warning("Not enough liquidity added to token {0}. Not buying. Only {1} liquidity added", token, amountStr);
                 return result;
             }
             else
@@ -101,16 +101,23 @@ namespace BscTokenSniper.Handlers
 
             if (_sniperConfig.MinimumPercentageOfTokenInLiquidityPool > 0)
             {
+                var ercContract = _bscWeb3.Eth.GetContract(_erc20Abi, token);
+                var balanceOfFunction = ercContract.GetFunction("balanceOf");
                 var tokenAmountInPool = otherPairIdx == 1 ? reserves.Reserve1 : reserves.Reserve0;
-                var totalTokenAmount = await _bscWeb3.Eth.GetContract(_erc20Abi, pairCreatedEvent.Pair).GetFunction("totalSupply").CallAsync<BigInteger>();
+                var deadWalletBalanceTasks = _sniperConfig.DeadWallets.Select(t => balanceOfFunction.CallAsync<BigInteger>(t)).ToList();
+                await Task.WhenAll(deadWalletBalanceTasks);
+                BigInteger deadWalletBalance = new BigInteger(0);
+                deadWalletBalanceTasks.ForEach(t => deadWalletBalance += t.Result);
+                var totalTokenAmount = await ercContract.GetFunction("totalSupply").CallAsync<BigInteger>();
                 if (totalTokenAmount == 0)
                 {
-                    Serilog.Log.Logger.Error("Token {0} contract is giving a invalid supply", pairCreatedEvent.Pair);
+                    Serilog.Log.Logger.Error("Token {0} contract is giving a invalid supply", token);
                     return false;
                 }
+                totalAmount -= deadWalletBalance;
                 var percentageInPool = new Fraction(tokenAmountInPool).Divide(totalTokenAmount).Multiply(100);
                 result = ((decimal)percentageInPool) > _sniperConfig.MinimumPercentageOfTokenInLiquidityPool;
-                Serilog.Log.Logger.Information("Token {0} Token Amount in Pool: {1} Total Supply: {2} Total Percentage in pool: {3}% Min Percentage Liquidity Check Status: {4}", pairCreatedEvent.Pair, tokenAmountInPool, totalTokenAmount, percentageInPool.ToDouble(), result);
+                Serilog.Log.Logger.Information("Token {0} Token Amount in Pool: {1} Total Supply: {2} Burned {3} Total Percentage in pool: {4}% Min Percentage Liquidity Check Status: {5}", token, tokenAmountInPool, totalTokenAmount, deadWalletBalance.ToString(), percentageInPool.ToDouble(), result);
             }
             return result;
         }
@@ -131,14 +138,14 @@ namespace BscTokenSniper.Handlers
                 Serilog.Log.Logger.Warning("Bsc contract is not verified for token {0}", otherTokenAddress);
                 return false;
             }
-
-            if (!innerResult["SourceCode"].Value<string>().Contains(_sniperConfig.PancakeswapRouterAddress))
+            var srcCode = innerResult.Value<string>("SourceCode");
+            if (!srcCode.Contains(_sniperConfig.PancakeswapRouterAddress) && !srcCode.Contains(_sniperConfig.V1PancakeswapRouterAddress))
             {
                 Serilog.Log.Logger.Information("Pancake swap router is invalid for token {0}", otherTokenAddress);
                 return false;
             }
 
-            var containsRugCheckStrings = _sniperConfig.ContractRugCheckStrings.FirstOrDefault(t => innerResult["SourceCode"].Contains(t));
+            var containsRugCheckStrings = _sniperConfig.ContractRugCheckStrings.FirstOrDefault(t => srcCode.Contains(t));
             if (!string.IsNullOrEmpty(containsRugCheckStrings))
             {
                 Serilog.Log.Logger.Warning("Failed rug check for token {0}, contains string: {1}", otherTokenAddress, containsRugCheckStrings);

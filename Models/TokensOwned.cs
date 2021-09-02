@@ -1,4 +1,5 @@
-﻿using Nethereum.Util;
+﻿using Fractions;
+using Nethereum.Util;
 using System.Numerics;
 
 namespace BscTokenSniper.Models
@@ -7,7 +8,8 @@ namespace BscTokenSniper.Models
     {
         public string Address { get; set; }
         public BigInteger Amount { get; set; }
-        public double SinglePrice { get; set; }
+        public BigInteger BnbAmount { get; set; }
+        public Fraction SinglePrice { get; set; }
         public int TokenIdx { get; set; }
         public string PairAddress { get; set; }
         public int Decimals { get; set; }

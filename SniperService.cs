@@ -14,6 +14,7 @@ using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -96,12 +97,14 @@ namespace BscTokenSniper
             try
             {
                 var pair = pairCreated.Event;
+                var otherPairAddress = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? pair.Token1 : pair.Token0;
                 var symbol = await _rugChecker.GetSymbol(pair);
                 pair.Symbol = symbol;
-                var rugCheckPassed = _sniperConfig.RugCheckEnabled ? await _rugChecker.CheckRugAsync(pair) : true;
-                var otherPairAddress = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? pair.Token1 : pair.Token0;
+
+                var addressWhitelisted = _sniperConfig.WhitelistedTokens.Any(t => t.Equals(otherPairAddress));
+                var rugCheckPassed = _sniperConfig.RugCheckEnabled && !addressWhitelisted ? await _rugChecker.CheckRugAsync(pair) : true;
                 var otherTokenIdx = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? 1 : 0;
-                var honeypotCheck = _sniperConfig.HoneypotCheck;
+                var honeypotCheck = !addressWhitelisted && _sniperConfig.HoneypotCheck;
 
                 Log.Logger.Information("Discovered Token Pair {0} Rug check Result: {1} Contract address: {2}", symbol, rugCheckPassed, otherPairAddress);
                 if (!rugCheckPassed)
@@ -112,7 +115,13 @@ namespace BscTokenSniper
 
                 if (!honeypotCheck)
                 {
-                    Log.Logger.Information("Buying Token pair: {0}", symbol);
+                    if (!addressWhitelisted)
+                    {
+                        Log.Logger.Information("Buying Token pair: {0}", symbol);
+                    } else
+                    {
+                        Log.Logger.Information("Buying Token pair: {0} WHITELISTED ADDRESS: {1}", symbol, addressWhitelisted);
+                    }
                     await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
                     return;
                 }

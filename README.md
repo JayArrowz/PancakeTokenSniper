@@ -36,6 +36,7 @@ There are specific checks involved that this sniper does when buying tokens. Som
 4. Ensures liquidty pair created has one of the `LiquidityPairAddress` address
 5. If `HoneypotCheck` is true the sniper will try to buy the `HoneypotCheckAmount`, then it will try to sell it. If this operation is successful it will buy the `SnipeAmount`
 6. If `RugdocCheckEnabled` is true the sniper will use the Rugdoc honeypot checker to check the contract
+7. The `WhitelistedTokens` can be used to bypass any honeypot and rug checks. This field accepts multiple token addresses
 
 ## Selling
 The Sniper automatically sells once a certain percentage of profit is made. This is defined in the config key `ProfitPercentageMargin`

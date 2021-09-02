@@ -52,6 +52,11 @@ namespace BscTokenSniper.Handlers
                     _sniperConfig.WalletAddress,
                     (DateTime.UtcNow.Ticks + _sniperConfig.TransactionRevertTimeSeconds));
                 var reciept = await _bscWeb3.TransactionManager.TransactionReceiptService.PollForReceiptAsync(buyReturnValue, new CancellationTokenSource(TimeSpan.FromMinutes(2)));
+                var sellPrice = await GetMarketPrice(new TokensOwned
+                {
+                    PairAddress = pairAddress,
+                    TokenIdx = tokenIdx
+                }, amount);
                 Log.Logger.Information("[BUY] TX ID: {buyReturnValue} Reciept: {@reciept}", buyReturnValue, reciept);
 
                 var swapEventList = reciept.DecodeAllEvents<SwapEvent>().Where(t => t.Event != null)
@@ -66,7 +71,8 @@ namespace BscTokenSniper.Handlers
                     {
                         Address = tokenAddress,
                         Amount = balance,
-                        SinglePrice = new Fraction(balance).Divide(new Fraction(amount.Value)).ToDouble(),
+                        BnbAmount = amount,
+                        SinglePrice = sellPrice,
                         TokenIdx = tokenIdx,
                         PairAddress = pairAddress,
                         Decimals = decimals,
@@ -146,16 +152,21 @@ namespace BscTokenSniper.Handlers
             }
         }
 
-        public async Task<BigInteger> GetMarketPrice(TokensOwned ownedToken, BigInteger amount)
+        private BigInteger GetMarketPrice(Reserves price, TokensOwned ownedToken, BigInteger amount)
         {
-            var price = await _rugChecker.GetReserves(ownedToken.PairAddress);
-            if(price.Reserve0 == 0 || price.Reserve1 == 0)
+            if (price.Reserve0 == 0 || price.Reserve1 == 0)
             {
                 return BigInteger.Zero;
             }
             var pricePerLiquidityToken = ownedToken.TokenIdx == 1 ? new Fraction(price.Reserve0).Divide(price.Reserve1) : new Fraction(price.Reserve1).Divide(price.Reserve0);
-           
+
             return ((BigInteger)pricePerLiquidityToken.Multiply(amount));
+        }
+
+        public async Task<BigInteger> GetMarketPrice(TokensOwned ownedToken, BigInteger amount)
+        {
+            var price = await _rugChecker.GetReserves(ownedToken.PairAddress);
+            return GetMarketPrice(price, ownedToken, amount);
         }
 
         public void Start()
@@ -179,12 +190,13 @@ namespace BscTokenSniper.Handlers
                     {
                         continue;
                     }
-                    var pricePerLiquidityToken = ownedToken.TokenIdx == 1 ? new Fraction(price.Reserve0).Divide(price.Reserve1).ToDouble() : new Fraction(price.Reserve1).Divide(price.Reserve0).ToDouble();
-                    var profitPerc = ((100.0 / ownedToken.SinglePrice) * pricePerLiquidityToken) - 100.0;
-                    Log.Logger.Information("Token: {0} Price bought: {1} Current Price: {2} Current Profit: {3}%",
-                        ownedToken.Address, ownedToken.SinglePrice, pricePerLiquidityToken, profitPerc);
 
-                    if (profitPerc > _sniperConfig.ProfitPercentageMargin)
+                    var currentPrice = GetMarketPrice(price, ownedToken, ownedToken.BnbAmount);
+                    var profitPerc = new Fraction(currentPrice).Subtract(ownedToken.SinglePrice).Divide(ownedToken.SinglePrice).Multiply(100);
+                    Log.Logger.Information("Token: {0} Price bought: {1} Current Price: {2} Current Profit: {3}%",
+                        ownedToken.Address, ((decimal)ownedToken.SinglePrice), ((decimal)currentPrice), ((decimal)profitPerc));
+
+                    if (profitPerc > new Fraction(_sniperConfig.ProfitPercentageMargin))
                     {
                         try
                         {
