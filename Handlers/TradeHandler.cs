@@ -44,6 +44,10 @@ namespace BscTokenSniper.Handlers
         {
             try
             {
+                if (_sniperConfig.BuyDelaySeconds > 0)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(_sniperConfig.BuyDelaySeconds));
+                }
                 var buyFunction = _pancakeContract.GetFunction("swapExactETHForTokens");
                 var gas = new HexBigInteger(_sniperConfig.GasAmount);
                 var amount = new HexBigInteger(Web3.Convert.ToWei(amt));

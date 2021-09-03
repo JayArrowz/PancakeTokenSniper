@@ -30,5 +30,6 @@ namespace BscTokenSniper.Models
         public bool RugdocCheckEnabled { get; set; }
         public string[] DeadWallets { get; set; }
         public string[] WhitelistedTokens { get; set; }
+        public int BuyDelaySeconds { get; set; }
     }
 }
