@@ -27,6 +27,7 @@ namespace BscTokenSniper
         private readonly Contract _factoryContract;
         private SniperConfiguration _sniperConfig;
         private bool _disposed;
+        private StreamingWebSocketClient _client;
         private readonly List<IDisposable> _disposables = new();
         private readonly RugHandler _rugChecker;
         private readonly TradeHandler _tradeHandler;
@@ -51,45 +52,56 @@ namespace BscTokenSniper
             }
         }
 
-        private async Task SubscribeEvent(string wssPath, IWeb3 web3, Action<EventLog<PairCreatedEvent>> onTokenSwapNext)
+        private async Task<EthLogsObservableSubscription> StartClient()
         {
-            var client = new StreamingWebSocketClient(wssPath);
-            _disposables.Add(client);
-            var filter = web3.Eth.GetEvent<PairCreatedEvent>(_sniperConfig.PancakeswapFactoryAddress).CreateFilterInput();
+            _client = new StreamingWebSocketClient(_sniperConfig.BscNode);
+            var filter = _bscWeb3.Eth.GetEvent<PairCreatedEvent>(_sniperConfig.PancakeswapFactoryAddress).CreateFilterInput();
             var filterTransfers = Event<PairCreatedEvent>.GetEventABI().CreateFilterInput();
             filterTransfers.Address = new string[1] { _sniperConfig.PancakeswapFactoryAddress };
-            var subscription = new EthLogsObservableSubscription(client);
+            var subscription = new EthLogsObservableSubscription(_client);
 
             _disposables.Add(subscription.GetSubscriptionDataResponsesAsObservable().Subscribe(t =>
             {
-                var decodedEvent = t.DecodeEvent<PairCreatedEvent>();
-                onTokenSwapNext(decodedEvent);
+                try
+                {
+                    var decodedEvent = t.DecodeEvent<PairCreatedEvent>();
+                    _ = PairCreated(decodedEvent).ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    Serilog.Log.Logger.Error(e, nameof(StartClient));
+                }
             }));
 
-            await client.StartAsync();
+            await _client.StartAsync();
             await subscription.SubscribeAsync(filter);
-            new Thread(() => KeepAliveClient(client)).Start();
+            return subscription;
         }
 
-        private void KeepAliveClient(StreamingWebSocketClient client)
+        private void KeepAliveClient()
         {
             while (!_disposed)
             {
-                var handler = new EthBlockNumberObservableHandler(client);
+                var handler = new EthBlockNumberObservableHandler(_client);
                 var disposable = handler.GetResponseAsObservable().Subscribe(x => Log.Logger.Information("Current block: {0}", x.Value));
                 try
                 {
                     handler.SendRequestAsync().Wait(TimeSpan.FromMinutes(5));
                 }
-                catch (Exception _){ }
+                catch (Exception e)
+                {
+                    Serilog.Log.Logger.Error(e, nameof(KeepAliveClient));
+                    Serilog.Log.Logger.Information("Error from websocket, restarting client.");
+                    _ = StartClient().Result;
+                }
                 Thread.Sleep(30000);
             }
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            var bscWalletPublicKey = EthECKey.GetPublicAddress(_sniperConfig.WalletPrivateKey);
-            await SubscribeEvent(_sniperConfig.BscNode, _bscWeb3, (e) => _ = PairCreated(e).ConfigureAwait(false));
+            await StartClient();
+            new Thread(KeepAliveClient).Start();
         }
 
         private async Task PairCreated(EventLog<PairCreatedEvent> pairCreated)
@@ -118,7 +130,8 @@ namespace BscTokenSniper
                     if (!addressWhitelisted)
                     {
                         Log.Logger.Information("Buying Token pair: {0}", symbol);
-                    } else
+                    }
+                    else
                     {
                         Log.Logger.Information("Buying Token pair: {0} WHITELISTED ADDRESS: {1}", symbol, addressWhitelisted);
                     }
