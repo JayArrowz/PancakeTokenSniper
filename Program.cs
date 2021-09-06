@@ -33,6 +33,7 @@ namespace BscTokenSniper
             services.AddHttpClient();
             services.AddSingleton<TradeHandler>();
             services.AddSingleton<RugHandler>();
+            services.AddSingleton<MempoolHandler>();
             services.Configure<SniperConfiguration>(config.GetSection("SniperConfiguration"));
             services.AddHostedService<SniperService>();
         });

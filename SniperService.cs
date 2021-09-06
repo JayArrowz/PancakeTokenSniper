@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Nethereum.Contracts;
 using Nethereum.JsonRpc.WebSocketStreamingClient;
 using Nethereum.RPC.Eth.DTOs;
+using Nethereum.RPC.Eth.Filters;
 using Nethereum.RPC.Reactive.Eth;
 using Nethereum.RPC.Reactive.Eth.Subscriptions;
 using Nethereum.Signer;
@@ -25,21 +26,26 @@ namespace BscTokenSniper
     {
         private readonly Web3 _bscWeb3;
         private readonly Contract _factoryContract;
+        private readonly Contract _pancakeContract;
         private SniperConfiguration _sniperConfig;
         private bool _disposed;
         private StreamingWebSocketClient _client;
+        private StreamingWebSocketClient _mempoolClient;
         private readonly List<IDisposable> _disposables = new();
         private readonly RugHandler _rugChecker;
         private readonly TradeHandler _tradeHandler;
+        private readonly MempoolHandler _mempoolHandler;
         private readonly CancellationTokenSource _processingCancellation = new CancellationTokenSource(TimeSpan.FromMinutes(2));
 
-        public SniperService(IOptions<SniperConfiguration> options, RugHandler rugChecker, TradeHandler tradeHandler)
+        public SniperService(IOptions<SniperConfiguration> options, RugHandler rugChecker, TradeHandler tradeHandler, MempoolHandler mempoolHandler)
         {
             _sniperConfig = options.Value;
             _bscWeb3 = new Web3(url: _sniperConfig.BscHttpApi, account: new Account(_sniperConfig.WalletPrivateKey));
             _factoryContract = _bscWeb3.Eth.GetContract(File.ReadAllText("./Abis/PairCreated.json"), _sniperConfig.PancakeswapFactoryAddress);
+            _pancakeContract = _bscWeb3.Eth.GetContract(File.ReadAllText("./Abis/Pancake.json"), _sniperConfig.PancakeswapRouterAddress);
             _rugChecker = rugChecker;
             _tradeHandler = tradeHandler;
+            _mempoolHandler = mempoolHandler;
         }
 
         private void CreateTokenPair(FilterLog log, Action<EventLog<PairCreatedEvent>> onNext)
@@ -55,11 +61,15 @@ namespace BscTokenSniper
         private async Task<EthLogsObservableSubscription> StartClient()
         {
             _client = new StreamingWebSocketClient(_sniperConfig.BscNode);
+            _mempoolClient = new StreamingWebSocketClient(_sniperConfig.BscNode);
             var filter = _bscWeb3.Eth.GetEvent<PairCreatedEvent>(_sniperConfig.PancakeswapFactoryAddress).CreateFilterInput();
-            var filterTransfers = Event<PairCreatedEvent>.GetEventABI().CreateFilterInput();
-            filterTransfers.Address = new string[1] { _sniperConfig.PancakeswapFactoryAddress };
+            
             var subscription = new EthLogsObservableSubscription(_client);
-
+            var mempoolSubscription = new EthNewPendingTransactionObservableSubscription(_mempoolClient);
+            var contractFilter = new NewFilterInput();
+            contractFilter.Address = new string[1] { _sniperConfig.PancakeswapRouterAddress };
+            _disposables.Add(mempoolSubscription.GetSubscriptionDataResponsesAsObservable().Subscribe(t => NewMempoolTransaction(t)));
+            
             _disposables.Add(subscription.GetSubscriptionDataResponsesAsObservable().Subscribe(t =>
             {
                 try
@@ -74,8 +84,15 @@ namespace BscTokenSniper
             }));
 
             await _client.StartAsync();
+            await _mempoolClient.StartAsync();
             await subscription.SubscribeAsync(filter);
+            await mempoolSubscription.SubscribeAsync(contractFilter);
             return subscription;
+        }
+
+        private void NewMempoolTransaction(string t)
+        {
+            _ = _mempoolHandler.Add(t).ConfigureAwait(false);
         }
 
         private void KeepAliveClient()
