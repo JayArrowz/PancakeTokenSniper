@@ -137,11 +137,6 @@ namespace BscTokenSniper
             }
         }
 
-        public async Task NewBlock(TransactionReceiptVO transaction)
-        {
-            Serilog.Log.Logger.Information("Transaction {@transaction}", transaction);
-        }
-
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             await StartClient();
