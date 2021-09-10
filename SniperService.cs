@@ -59,12 +59,6 @@ namespace BscTokenSniper
         {
             _client = new StreamingWebSocketClient(_sniperConfig.BscNode);
             var filter = _bscWeb3.Eth.GetEvent<PairCreatedEvent>(_sniperConfig.PancakeswapFactoryAddress).CreateFilterInput();
-
-            var sub = new NewFilterInput
-            {
-                Address = new string[1] { _sniperConfig.PancakeswapRouterAddress },
-            };
-
             var filterTransfers = Event<PairCreatedEvent>.GetEventABI().CreateFilterInput();
             filterTransfers.Address = new string[1] { _sniperConfig.PancakeswapFactoryAddress };
 
