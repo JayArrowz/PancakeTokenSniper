@@ -31,5 +31,6 @@ namespace BscTokenSniper.Models
         public string[] DeadWallets { get; set; }
         public string[] WhitelistedTokens { get; set; }
         public int BuyDelaySeconds { get; set; }
+        public bool CheckRouterAddressInContract { get; set; }
     }
 }

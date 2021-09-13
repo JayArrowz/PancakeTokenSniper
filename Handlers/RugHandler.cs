@@ -139,10 +139,14 @@ namespace BscTokenSniper.Handlers
                 return false;
             }
             var srcCode = innerResult.Value<string>("SourceCode");
-            if (!srcCode.Contains(_sniperConfig.PancakeswapRouterAddress) && !srcCode.Contains(_sniperConfig.V1PancakeswapRouterAddress))
+
+            if (_sniperConfig.CheckRouterAddressInContract)
             {
-                Serilog.Log.Logger.Information("Pancake swap router is invalid for token {0}", otherTokenAddress);
-                return false;
+                if (!srcCode.Contains(_sniperConfig.PancakeswapRouterAddress) && !srcCode.Contains(_sniperConfig.V1PancakeswapRouterAddress))
+                {
+                    Serilog.Log.Logger.Information("Pancake swap router is invalid for token {0}", otherTokenAddress);
+                    return false;
+                }
             }
 
             var containsRugCheckStrings = _sniperConfig.ContractRugCheckStrings.FirstOrDefault(t => srcCode.Contains(t));
