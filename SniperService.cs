@@ -163,6 +163,13 @@ namespace BscTokenSniper
             pair.Symbol = symbol;
 
             var addressWhitelisted = _sniperConfig.WhitelistedTokens.Any(t => t.Equals(otherPairAddress));
+            if(_sniperConfig.OnlyBuyWhitelist && !addressWhitelisted)
+            {
+                Log.Logger.Warning("Address is not in the whitelist blocked {0}", otherPairAddress);
+                return;
+            }
+
+
             var rugCheckPassed = _sniperConfig.RugCheckEnabled && !addressWhitelisted ? await _rugChecker.CheckRugAsync(pair) : true;
             var otherTokenIdx = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? 1 : 0;
             var honeypotCheck = !addressWhitelisted && _sniperConfig.HoneypotCheck;

@@ -32,5 +32,6 @@ namespace BscTokenSniper.Models
         public string[] WhitelistedTokens { get; set; }
         public int BuyDelaySeconds { get; set; }
         public bool CheckRouterAddressInContract { get; set; }
+        public bool OnlyBuyWhitelist { get; set; }
     }
 }

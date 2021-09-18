@@ -40,6 +40,7 @@ There are specific checks involved that this sniper does when buying tokens. Som
 6. If `RugdocCheckEnabled` is true the sniper will use the Rugdoc honeypot checker to check the contract
 7. The `WhitelistedTokens` can be used to bypass any honeypot and rug checks. This field accepts multiple token addresses
 8. If the `CheckRouterAddressInContract` is enabled the sniper will check if the contract contains the router address 
+9. If the `OnlyBuyWhitelist` is enabled the contract will only interact with whitelisted tokens
 
 ## Buying
 The amount to snipe is denoted in the config as `AmountToSnipe`. This value will trade the `LiquidityPairAddress` in your wallet with the coin to snipe at the current trade price.
