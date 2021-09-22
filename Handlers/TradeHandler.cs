@@ -44,6 +44,11 @@ namespace BscTokenSniper.Handlers
         {
             try
             {
+                if (_ownedTokenList.Any(t => t.Address == tokenAddress)) {
+
+                    Log.Logger.Information("[CANNOT BUY] Token: {0} Cause: {1}", tokenAddress, "Already has token");
+                    return false;
+                }
                 if (_sniperConfig.BuyDelaySeconds > 0)
                 {
                     await Task.Delay(TimeSpan.FromSeconds(_sniperConfig.BuyDelaySeconds));
