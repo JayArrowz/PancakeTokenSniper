@@ -10,6 +10,7 @@ namespace BscTokenSniper.Models
         public BigInteger Amount { get; set; }
         public BigInteger BnbAmount { get; set; }
         public Fraction SinglePrice { get; set; }
+        public Fraction PeakProfit { get; set; }
         public int TokenIdx { get; set; }
         public string PairAddress { get; set; }
         public int Decimals { get; set; }

@@ -192,6 +192,7 @@ namespace BscTokenSniper
                     Log.Logger.Information("Buying Token pair: {0} WHITELISTED ADDRESS: {1}", symbol, addressWhitelisted);
                 }
                 await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
+                await _tradeHandler.Approve(otherPairAddress);
                 return;
             }
             Log.Logger.Information("Starting Honeypot check for {0} with amount {1}", symbol, _sniperConfig.HoneypotCheckAmount);
