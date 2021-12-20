@@ -216,7 +216,10 @@ namespace BscTokenSniper.Handlers
                         drawDown = ownedToken.PeakProfit.Subtract(profitPerc).Divide(ownedToken.PeakProfit)
                                              .Multiply(100);
                     }
-                    if (drawDown > new Fraction(_sniperConfig.TrailingStopLoss) ||
+
+                    bool stopLossTriggered = _sniperConfig.TrailingStopLoss.HasValue &&
+                                             drawDown > new Fraction(_sniperConfig.TrailingStopLoss.Value);                     
+                    if (stopLossTriggered ||
                         profitPerc > new Fraction(_sniperConfig.ProfitPercentageMargin))
                     {
                         try
