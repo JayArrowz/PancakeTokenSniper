@@ -33,5 +33,6 @@ namespace BscTokenSniper.Models
         public int BuyDelaySeconds { get; set; }
         public bool CheckRouterAddressInContract { get; set; }
         public bool OnlyBuyWhitelist { get; set; }
+        public double? TrailingStopLoss { get; set; }
     }
 }

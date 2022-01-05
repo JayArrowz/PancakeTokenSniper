@@ -85,7 +85,8 @@ namespace BscTokenSniper.Handlers
                         TokenIdx = tokenIdx,
                         PairAddress = pairAddress,
                         Decimals = decimals,
-                        HoneypotCheck = honeypotCheck
+                        HoneypotCheck = honeypotCheck,
+                        PeakProfit = new Fraction(0)
                     });
                     return true;
                 }
@@ -205,7 +206,21 @@ namespace BscTokenSniper.Handlers
                     Log.Logger.Information("Token: {0} Price bought: {1} Current Price: {2} Current Profit: {3}%",
                         ownedToken.Address, ((decimal)ownedToken.SinglePrice), ((decimal)currentPrice), ((decimal)profitPerc));
 
-                    if (profitPerc > new Fraction(_sniperConfig.ProfitPercentageMargin))
+                    Fraction drawDown = new Fraction(0);
+                    if (profitPerc > ownedToken.PeakProfit)
+                    {
+                        ownedToken.PeakProfit = profitPerc;
+                    }
+                    else
+                    {
+                        drawDown = ownedToken.PeakProfit.Subtract(profitPerc).Divide(ownedToken.PeakProfit)
+                                             .Multiply(100);
+                    }
+
+                    bool stopLossTriggered = _sniperConfig.TrailingStopLoss.HasValue &&
+                                             drawDown > new Fraction(_sniperConfig.TrailingStopLoss.Value);                     
+                    if (stopLossTriggered ||
+                        profitPerc > new Fraction(_sniperConfig.ProfitPercentageMargin))
                     {
                         try
                         {

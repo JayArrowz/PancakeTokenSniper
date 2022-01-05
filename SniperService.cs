@@ -162,7 +162,7 @@ namespace BscTokenSniper
             var symbol = await _rugChecker.GetSymbol(pair);
             pair.Symbol = symbol;
 
-            var addressWhitelisted = _sniperConfig.WhitelistedTokens.Any(t => t.Equals(otherPairAddress));
+            var addressWhitelisted = _sniperConfig.WhitelistedTokens.Any(t => t.Equals(otherPairAddress, StringComparison.InvariantCultureIgnoreCase));
             if(_sniperConfig.OnlyBuyWhitelist && !addressWhitelisted)
             {
                 Log.Logger.Warning("Address is not in the whitelist blocked {0}", otherPairAddress);
@@ -191,7 +191,11 @@ namespace BscTokenSniper
                 {
                     Log.Logger.Information("Buying Token pair: {0} WHITELISTED ADDRESS: {1}", symbol, addressWhitelisted);
                 }
-                await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
+                bool success = await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
+                if(success)
+                {
+                    await _tradeHandler.Approve(otherPairAddress);
+                }
                 return;
             }
             Log.Logger.Information("Starting Honeypot check for {0} with amount {1}", symbol, _sniperConfig.HoneypotCheckAmount);
