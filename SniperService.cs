@@ -13,11 +13,13 @@ using Nethereum.RPC.Reactive.Eth.Subscriptions;
 using Nethereum.Signer;
 using Nethereum.Web3;
 using Nethereum.Web3.Accounts;
+using Newtonsoft.Json;
 using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -52,6 +54,18 @@ namespace BscTokenSniper
             if (onNext != null)
             {
                 onNext.Invoke(pairCreated);
+            }
+        }
+        private HoneyPotResponse isHoneyPotCheck(string otherPairAddress)
+        {
+            using (WebClient webClient = new WebClient())
+            {
+
+                string response = webClient.DownloadString($"https://aywt3wreda.execute-api.eu-west-1.amazonaws.com/default/IsHoneypot?chain=bsc&token={otherPairAddress}");
+                HoneyPotResponse responseObject = JsonConvert.DeserializeObject<HoneyPotResponse>(response); ;
+
+                return responseObject;
+
             }
         }
 
@@ -131,7 +145,7 @@ namespace BscTokenSniper
                 {
                     Serilog.Log.Logger.Error(e, nameof(KeepAliveClient));
                     Serilog.Log.Logger.Information("Error from websocket, restarting client.");
-                    _ = StartClient().Result;
+                   _ = StartClient().Result;
                 }
                 Thread.Sleep(3000);
             }
@@ -195,26 +209,8 @@ namespace BscTokenSniper
                 return;
             }
             Log.Logger.Information("Starting Honeypot check for {0} with amount {1}", symbol, _sniperConfig.HoneypotCheckAmount);
-            var buySuccess = await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.HoneypotCheckAmount, true);
-            if (!buySuccess)
-            {
-                Log.Logger.Fatal("Honeypot check failed could not buy token: {0}", pair.Symbol);
-                return;
-            }
-            var ownedToken = _tradeHandler.GetOwnedTokens(otherPairAddress);
-            await _tradeHandler.Approve(otherPairAddress);
-            var marketPrice = await _tradeHandler.GetMarketPrice(ownedToken, ownedToken.Amount - 1);
-            var sellSuccess = false;
-
-            try
-            {
-                sellSuccess = await _tradeHandler.Sell(otherPairAddress, ownedToken.Amount - 1, marketPrice, _sniperConfig.SellSlippage);
-            }
-            catch (Exception e)
-            {
-                Serilog.Log.Error("Error Sell", e);
-            }
-            if (!sellSuccess)
+            HoneyPotResponse honeyPotDetected = isHoneyPotCheck(otherPairAddress);
+            if (honeyPotDetected.IsHoneypot)
             {
                 Log.Logger.Fatal("Honeypot check DETECTED HONEYPOT could not sell token: {0}", pair.Symbol);
                 return;
