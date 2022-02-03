@@ -208,7 +208,7 @@ namespace BscTokenSniper
                 await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
                 return;
             }
-            Log.Logger.Information("Starting Honeypot check for {0} with amount {1}", symbol, _sniperConfig.HoneypotCheckAmount);
+            Log.Logger.Information("Starting Honeypot check for {0}", symbol);
             HoneyPotResponse honeyPotDetected = isHoneyPotCheck(otherPairAddress);
             if (honeyPotDetected.IsHoneypot)
             {
