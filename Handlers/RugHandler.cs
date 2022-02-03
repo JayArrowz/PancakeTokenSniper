@@ -55,7 +55,6 @@ namespace BscTokenSniper.Handlers
 
         public async Task<string> GetSymbol(PairCreatedEvent pairCreatedEvent)
         {
-            //TODO: Modify for other pair address
             var otherPairAddress = pairCreatedEvent.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ?
                 pairCreatedEvent.Token1 : pairCreatedEvent.Token0;
             return await _bscWeb3.Eth.GetContract(_erc20Abi, otherPairAddress).GetFunction("symbol").CallAsync<string>();

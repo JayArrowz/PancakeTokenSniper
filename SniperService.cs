@@ -61,7 +61,7 @@ namespace BscTokenSniper
             using (WebClient webClient = new WebClient())
             {
 
-                string response = webClient.DownloadString($"https://aywt3wreda.execute-api.eu-west-1.amazonaws.com/default/IsHoneypot?chain=bsc&token={otherPairAddress}");
+                string response = webClient.DownloadString($"https://aywt3wreda.execute-api.eu-west-1.amazonaws.com/default/IsHoneypot?chain=bsc3&token={otherPairAddress}");
                 HoneyPotResponse responseObject = JsonConvert.DeserializeObject<HoneyPotResponse>(response); ;
 
                 return responseObject;
